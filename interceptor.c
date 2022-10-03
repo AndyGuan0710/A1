@@ -258,7 +258,7 @@ asmlinkage long my_exit_group(struct pt_regs reg)
 	pid_t pid = current->pid;
     spin_lock(&my_table_lock);
     del_pid(pid)；
-    spin_unlock(&my_table_lock)
+    spin_unlock(&my_table_lock);
     return orig_exit_group(reg);
 
 }
@@ -390,7 +390,7 @@ static int init_function(void) {
     set_addr_ro((unsigned long)sys_call_table);
     spin_unlock(&sys_call_table_lock);
 
-	spin_lock(&Smy_table_lock);
+	spin_lock(&my_table_lock);
     int index;
 	for(index = 0; index < NR_syscalls; index = index + 1 )
    {
