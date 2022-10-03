@@ -380,7 +380,7 @@ long (*orig_custom_syscall)(void);
  * - Ensure synchronization as needed.
  */
 static int init_function(void) {
-    spin_lock(sys_call_table_lock);
+    spin_lock(&sys_call_table_lock);
     set_addr_rw((unsigned long)sys_call_table);
     orig_custom_syscall = sys_call_table[MY_CUSTOM_SYSCALL];
     sys_call_table[MY_CUSTOM_SYSCALL] = my_syscall;
@@ -388,9 +388,9 @@ static int init_function(void) {
     sys_call_table[__NR_exit_group] = my_exit_group;
 
     set_addr_ro((unsigned long)sys_call_table);
-    spin_unlock(sys_call_table_lock);
+    spin_unlock(&sys_call_table_lock);
 
-	spin_lock(my_table_lock);
+	spin_lock(&Smy_table_lock);
     int index;
 	for(index = 0; index < NR_syscalls; index = index + 1 )
    {
@@ -399,7 +399,7 @@ static int init_function(void) {
 	table[index].listcount = 0;
 	INIT_LIST_HEAD (&(table[index].my_list));
    }
-    spin_unlock(my_table_lock);
+    spin_unlock(&my_table_lock);
 
 	return 0;
 }
