@@ -463,6 +463,7 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
 
         if (pid == 0){
 
+
             spin_lock(&my_table_lock);
             table[syscall].monitored = 0;
             destroy_list(syscall);
@@ -470,10 +471,12 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
             spin_unlock(&my_table_lock);
 
         }else if(table[syscall].monitored == 1){
+            int len;
 
             spin_lock(&my_table_lock);
             del_pid_sysc( pid, syscall);
-            int len = table[syscall].listcount;
+            
+            len = table[syscall].listcount;
 
             if (len == 0){
                 table[syscall].monitored = 0;
@@ -513,6 +516,7 @@ long (*orig_custom_syscall)(void);
  * - Ensure synchronization as needed.
  */
 static int init_function(void) {
+    int index;
     
     spin_lock(&sys_call_table_lock);
     set_addr_rw((unsigned long)sys_call_table);
@@ -525,7 +529,7 @@ static int init_function(void) {
     spin_unlock(&sys_call_table_lock);
 
 	spin_lock(&my_table_lock);
-    int index;
+    
 	for(index = 0; index < NR_syscalls; index = index + 1)
    {
 	table[index].intercepted = 0;
@@ -551,6 +555,7 @@ static int init_function(void) {
  */
 static void exit_function(void)
 {        
+    int index;
 	spin_lock(&sys_call_table_lock);
     set_addr_rw((unsigned long)sys_call_table);
     sys_call_table[MY_CUSTOM_SYSCALL] = orig_custom_syscall;
@@ -561,12 +566,11 @@ static void exit_function(void)
 	spin_lock(&my_table_lock);
     set_addr_rw((unsigned long)sys_call_table);
 
-    int index;
 	for(index = 0; index < NR_syscalls; index = index + 1){
 
         if (table[index].intercepted == 1){
             
-            sys_call_table[i] = table[i].f;
+            sys_call_table[index] = table[index].f;
             
         }
     	table[index].intercepted = 0;
