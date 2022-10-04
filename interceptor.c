@@ -285,11 +285,11 @@ asmlinkage long my_exit_group(struct pt_regs reg)
 asmlinkage long interceptor(struct pt_regs reg) {
     int i = table[reg.ax].monitored;
     if (i == 1){ // monitored = 1
-        if (check_pid_monitored(reg.ax, current->pid)){
+        if (check_pid_monitored(reg.ax, current->pid) == 1){
             log_message(current->pid, reg.ax, reg.bx, reg.cx, reg.dx, reg.si, reg.di, reg.bp);
         }
     }else if (i == 2){ // monitored = 2
-        if (check_pid_monitored(reg.ax, current->pid)){
+        if (check_pid_monitored(reg.ax, current->pid) == 0){
             log_message(current->pid, reg.ax, reg.bx, reg.cx, reg.dx, reg.si, reg.di, reg.bp);
         }
     }
@@ -351,7 +351,7 @@ asmlinkage long interceptor(struct pt_regs reg) {
 asmlinkage long my_syscall(int cmd, int syscall, int pid) {
 
     /* check conditions */
-    if (syscall < 0 || syscall > NR_syscalls - 1 || syscall == MY_CUSTOM_SYSCALL){
+    if (syscall <= 0 || syscall > NR_syscalls - 1 || syscall == MY_CUSTOM_SYSCALL){
         return -EINVAL;
     }
     if (pid != 0 && (pid < 0 || pid_task(find_vpid(pid), PIDTYPE_PID) == NULL)){
@@ -420,73 +420,102 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
 
     /* request monitor case */
     if (cmd == REQUEST_START_MONITORING){
+        // Monitor one PID (pid != 0)
+        if(pid != 0 ){
+            // monitered == 1 or 0
+            if (table[syscall].monitored != 2){
+                // pid in my_list, it is monitored, return -EBUSY
+                if (check_pid_monitored(syscall, pid) == 1){
+                    return -EBUSY;
+                // pid not in my_list, add it
+                }else{
+                    spin_lock(&my_table_lock);
+                    if (add_pid_sysc(pid, syscall) != 0){
+                        spin_unlock(&my_table_lock);
+                        return -ENOMEM;
+                    }
+                    table[syscall].monitored = 1;
+                    spin_unlock(&my_table_lock);
+                }
+            // moniterd == 2
+            }else{
+                // pid in ingore list, remove it
+                if(check_pid_monitored(syscall, pid) == 1){
+                    spin_lock(&my_table_lock);
+                    del_pid_sysc(pid, syscall);
+                    spin_unlock(&my_table_lock);
+                // pid not in ignore list, it already moniterd, return -EBUSY
+                }else{
+                    return -EBUSY
+                }
+            }
+        // Monitor all PID (pid = 0)
+        }else{
+            // monitored == 2 and ingore list is empty, return return -EBUSY
+            if(table[syscall].monitored == 2 && table[syscall].listcount == 0){
+                return -EBUSY
+            // not all pid is monitored, clear my_list or ignore list, it becomes a empty ingnore list
+            }else{
+                spin_lock(&my_table_lock);
+                destroy_list(int sysc);
+                INIT_LIST_HEAD(&(table[syscall].my_list));
+                table[syscall].monitored = 2;
+                spin_unlock(&my_table_lock);
+            }
 
-        // condition check
-        if (check_pid_monitored(syscall, pid) == 1 || table[syscall].monitored == 2){
-            return -EBUSY;
         }
-        if(table[syscall].intercepted == 0){
-            return -EINVAL;
-        }
-
-        spin_lock(&my_table_lock);
-
-        if (add_pid_sysc(pid, syscall) != 0){
-            spin_unlock(&my_table_lock);
-            return -ENOMEM;
-        }
-        
-        if (pid == 0){
-            table[syscall].monitored = 2;
-        }
-        else{
-            table[syscall].monitored = 1;
-        }
-
-        spin_unlock(&my_table_lock);
         return 0;
     }
 
     /* request stop monitor case */
     if (cmd == REQUEST_STOP_MONITORING){
-
-        // conditions check
+        // the syscall not intercepted yet, can not stop it
         if(table[syscall].intercepted == 0){
             return -EINVAL;
         }
+        // no pit is monitored , can not stop it
         if(table[syscall].monitored == 0){
             return -EINVAL;
         }
-        if(check_pid_monitored(syscall, pid) != 1){
-            return -EINVAL;
-        }
-
-        if (pid == 0){
-
-
+        // stop monitor one pid (pid != 0)
+        if (pid != 0){
+            // all pid not in ignore list are monitored (monitored == 2)
+            if(table[syscall].monitored == 2){
+                // pid in ignore list, can not stop it, return -EINVAL
+                if(check_pid_monitored(syscall, pid) == 1){
+                    return -EINVAL;
+                // pid not in ignore list, to stop it, add it to the ignore list
+                }else{
+                    spin_lock(&my_table_lock);
+                    if (add_pid_sysc(pid, syscall) != 0){
+                        spin_unlock(&my_table_lock);
+                        return -ENOMEM;
+                    }
+                    spin_unlock(&my_table_lock);
+                }
+            // Pid in my_lsit are monitord (monitored == 1)
+            }else{
+                // pid in my_list, to stop it, remove it from the list
+                if(check_pid_monitored(syscall, pid) == 1){
+                    spin_lock(&my_table_lock);
+                    del_pid_sysc(pid, syscall);
+                    // no pid in my_list, change monitored to 0
+                    if (table[syscall].listcount == 0){
+                        table[syscall].monitored = 0;
+                    }
+                    spin_unlock(&my_table_lock);
+                // pid not in my_list, is not monitored, return -EINVAL
+                }else{
+                    return -EINVAL
+                }
+            }
+        // stop monitor all pid (pid == 0)
+        }else{
+            //destroy ignore list or my_list, set monitored to 0
             spin_lock(&my_table_lock);
-            table[syscall].monitored = 0;
             destroy_list(syscall);
             INIT_LIST_HEAD(&(table[syscall].my_list));
-            spin_unlock(&my_table_lock);
-
-        }else if(table[syscall].monitored == 1){
-            int len;
-
-            spin_lock(&my_table_lock);
-            del_pid_sysc( pid, syscall);
-            
-            len = table[syscall].listcount;
-
-            if (len == 0){
-                table[syscall].monitored = 0;
-            }
-
-            spin_unlock(&my_table_lock);
-
-        }else{       
-
-            return -EINVAL;
+            spin_unlock(&my_table_lock);  
         }
         return 0;
 
