@@ -446,18 +446,18 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
                     spin_unlock(&my_table_lock);
                 // pid not in ignore list, it already moniterd, return -EBUSY
                 }else{
-                    return -EBUSY
+                    return -EBUSY;
                 }
             }
         // Monitor all PID (pid = 0)
         }else{
             // monitored == 2 and ingore list is empty, return return -EBUSY
             if(table[syscall].monitored == 2 && table[syscall].listcount == 0){
-                return -EBUSY
+                return -EBUSY;
             // not all pid is monitored, clear my_list or ignore list, it becomes a empty ingnore list
             }else{
                 spin_lock(&my_table_lock);
-                destroy_list(int sysc);
+                destroy_list(syscall);
                 INIT_LIST_HEAD(&(table[syscall].my_list));
                 table[syscall].monitored = 2;
                 spin_unlock(&my_table_lock);
