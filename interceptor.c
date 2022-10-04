@@ -350,7 +350,7 @@ asmlinkage long interceptor(struct pt_regs reg) {
  */
 asmlinkage long my_syscall(int cmd, int syscall, int pid) {
 
-    /* check conditions */
+    /* check basic invalid conditions */
     if (syscall <= 0 || syscall > NR_syscalls - 1 || syscall == MY_CUSTOM_SYSCALL){
         return -EINVAL;
     }
@@ -506,7 +506,7 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
                     spin_unlock(&my_table_lock);
                 // pid not in my_list, is not monitored, return -EINVAL
                 }else{
-                    return -EINVAL
+                    return -EINVAL;
                 }
             }
         // stop monitor all pid (pid == 0)
