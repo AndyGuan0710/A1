@@ -349,14 +349,15 @@ asmlinkage long interceptor(struct pt_regs reg) {
  *   you might be holding, before you exit the function (including error cases!).  
  */
 asmlinkage long my_syscall(int cmd, int syscall, int pid) {
-    if (syscall < 0 || syscall > NR_syscall - 1 || syscall == MY_CUSTOM_SYSCALL){
+    if (syscall < 0 || syscall > NR_syscalls - 1 || syscall == MY_CUSTOM_SYSCALL){
         return -EINVAL;
     }
     if (pid != 0 && (pid < 0 || pid_task(find_vpid(pid), PIDTYPE_PID) == NULL)){
         return -EINVAL;
     }
-    if (cmd > 4 || cmd < 0):
+    if (cmd > 4 || cmd < 0){
         return -EINVAL;
+    }
     if ((cmd == 1 || cmd == 2) && current_uid() != 0){
         return -EPERM;
     }
@@ -377,7 +378,7 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
         set_addr_rw((unsigned long)sys_call_table);
 
         table[syscall].f = sys_call_table[syscall];
-        sys_call_table[syscall] = interceptor
+        sys_call_table[syscall] = interceptor;
         table[syscall] .intercepted = 1;
         set_addr_ro((unsigned long)sys_call_table);
          
@@ -411,7 +412,7 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
 
     }
     if (cmd == REQUEST_START_MONITORING){
-        if (check_pid_monitored(int sysc, pid_t pid) == 1 || table[syscall].monitored == 2){
+        if (check_pid_monitored(syscall, pid) == 1 || table[syscall].monitored == 2){
             return -EBUSY;
         }
         if(table[syscall].intercepted == 0){
@@ -420,7 +421,7 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
 
         spin_lock(&my_table_lock);
 
-        if (add_pid_sysc(pid_t pid, int sysc) != 0){
+        if (add_pid_sysc(pid, syscall) != 0){
             spin_unlock(&my_table_lock);
             return -ENOMEM;
         }
@@ -442,7 +443,7 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
         if(table[syscall].monitored == 0){
             return -EINVAL;
         }
-        if(check_pid_monitored(int sysc, pid_t pid) != 1){
+        if(check_pid_monitored(syscall, pid) != 1){
             return -EINVAL;
         }
 
