@@ -451,11 +451,11 @@ asmlinkage long my_syscall(int cmd, int syscall, int pid) {
             spin_lock(&my_table_lock);
             table[syscall].monitored = 0;
             destroy_list(syscall);
-            INIT_LIST_HEAD (&(table[index].my_list));
+            INIT_LIST_HEAD (&(table[syscall].my_list));
             spin_unlock(&my_table_lock);
         }else if(table[syscall].monitored == 1){
             spin_lock(&my_table_lock);
-            del_pid(pid_t pid);
+            del_pid_sysc( pid, syscall);
             int len = table[syscall].listcount;
             if (len == 0){
                 table[syscall].monitored = 0;
